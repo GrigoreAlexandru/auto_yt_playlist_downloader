@@ -1,0 +1,5 @@
+youtube_dl==2019.2.8
+google_auth_oauthlib==0.2.0
+schedule==0.6.0
+protobuf==3.7.0
+google_api_python_client==1.7.8
