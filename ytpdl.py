@@ -10,10 +10,7 @@ import argparse
 
 import youtube
 import youtube_dl
-if __name__ == '__main__':
-    #main()
-    # youtube.init()
-     print('test')
+
 # Lists of Youtube playlist resource
 playlists_to_update = []
 
@@ -154,5 +151,7 @@ def main():
     else:
         parser.print_help()
 
+if __name__ == '__main__':
+    main()
 
 
