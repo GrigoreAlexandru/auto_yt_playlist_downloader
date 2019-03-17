@@ -41,7 +41,7 @@ def init():
 #     Custom Youtube api requests
 # =====================================
 
-def _playlistitems_list(id, token='', maxResults=50):
+def _playlistitems_list(id, token=None, maxResults=50):
     return client.playlistItems().list(
         part='snippet',
         maxResults=maxResults,
@@ -58,12 +58,13 @@ def _channel_related_playlists(id=None, mine=None):
     ).execute()['items'][0]['contentDetails']['relatedPlaylists']
 
 
-def _my_playlists_list(token=''):
+def _playlists_list(token=None, mine=None, id=None):
     return client.playlists().list(
         part='snippet',
-        mine=True,
+        mine=mine,
         maxResults=50,
-        pageToken=token
+        pageToken=token,
+        id=id
     ).execute()
 
 
@@ -74,28 +75,28 @@ def get_my_playlists():
             'id': item['id']
         } for item in response['items']]
 
-    response = _my_playlists_list()
+    response = _playlists_list(mine=True)
     token = response.get('nextPageToken')
     playlists = get_items()
     while token:
-        response = _my_playlists_list(token)
+        response = _playlists_list(token, True)
         token = response.get('nextPageToken')
         playlists.extend(get_items())
     return playlists
 
 
-def get_playlist_items(id, all=False):
+def get_playlist_items(id, all=False, maxResults=50):
     def get_items():
         return [{
             'title': item['snippet']['title'],
             'id': item['snippet']['resourceId']['videoId']
         } for item in response['items']]
 
-    response = _playlistitems_list(id)
+    response = _playlistitems_list(id, maxResults=maxResults)
     token = response.get('nextPageToken')
     videos = get_items()
     while token and all:
-        response = _playlistitems_list(id, token)
+        response = _playlistitems_list(id, token, maxResults)
         token = response.get('nextPageToken')
         videos.extend(get_items())
     return videos
@@ -108,8 +109,16 @@ def get_liked_playlist():
 
 def get_uploads_playlist(id):
     upload_id = _channel_related_playlists(id)['uploads']
-    return get_playlist_items(upload_id, True)
+    return get_playlist(upload_id)
 
 
-def get_last_vid(id):
-    return _playlistitems_list(id, maxResults=1)['items'][0]['contentDetails']['videoId']
+def get_latest_id(id):
+    return get_playlist_items(id, maxResults=1)[0]['id']
+
+
+def get_playlist(id):
+    item = _playlists_list(id=id)['items']
+    return {
+        'title': item[0]['snippet']['title'],
+        'id': item[0]['id']
+    }

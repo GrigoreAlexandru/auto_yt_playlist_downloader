@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, unicode_literals
 
 import itertools
 import pickle
@@ -8,18 +8,20 @@ import time
 import schedule
 import argparse
 
-
 import youtube
 import youtube_dl
-
+if __name__ == '__main__':
+    #main()
+    # youtube.init()
+     print('test')
 # Lists of Youtube playlist resource
 playlists_to_update = []
-download_list = []
+
 update_rate = 0.2 * 60
 done = False
 ydl_opts = {
-    'ignore-errors': True,
-    'o': '%(playlist)s/%(playlist_index)s - %(title)s.%(ext)s'
+    'ignore-errors': True
+
 }
 
 
@@ -30,6 +32,18 @@ class StoreDictKeyPair(argparse.Action):
             k, v = kv.split("=")
             my_dict[k] = v
         setattr(namespace, self.dest, my_dict)
+
+
+def init(update_rate):
+    global playlists_to_update
+    try:
+        with open('update_list.dat', 'r+b') as update_list_dat:
+            playlists_to_update = pickle.load(update_list_dat)
+    except IOError:
+        open('update_list.dat', 'w').close()
+
+    schedule.every(update_rate).seconds.do(job)
+    new_thread(schedule_thread)
 
 
 def animate():
@@ -45,25 +59,18 @@ def animate():
 def stop_anim():
     global done
     done = True
-    time.sleep(0.1)
+    time.sleep(0.3)
 
 
 def add_to_update_queue(item):
     playlists_to_update.append(item)
-    print(item['snippet']['title'], "added to update queue")
+    print(item['title'], "added to update queue")
 
 
-def download_playlist(item):
-    download_list.append(item)
-    print('Downloading', item['snippet']['title'])
+def download(item, title):
+    print('Downloading ', title)
+    ydl_opts['outtmpl'] = '{}\%(title)s.%(ext)s'.format(title)
     youtube_dl.YoutubeDL(ydl_opts).download([item['id']])
-
-def download_update(item):
-    id=item['contentDetails']['videoId']
-    print('Downloading', id)
-    youtube_dl.YoutubeDL(ydl_opts).download([id])
- 
-   
 
 
 def job():
@@ -71,36 +78,24 @@ def job():
     map(update, playlists_to_update)
 
 
-
-def update(item):
-    last_vid = item.get('last_vid')
-    id = item['id']
-    if last_vid:
-        if last_vid != youtube.get_last_vid(id):
-            list = youtube.get_playlist_items_list(id)['items']
-            i = next((index for (index, d) in enumerate(list) if d['contentDetails']['videoId'] == last_vid), None)
-            map(download_update, list[:i])
+def update(playlist):
+    latest_id = playlist.get('latest_id')
+    old_id = playlist['id']
+    new_latest_id = youtube.get_latest_id(old_id)
+    if latest_id:
+        if latest_id != new_latest_id:
+            new_vids = youtube.get_playlist_items(old_id)
+            old_vid_pos = next((index for (index, id) in enumerate(new_vids) if id['id'] == latest_id), None)
+            map(download, new_vids[:old_vid_pos], [playlist['title']])
         else:
             print('no update')
-    item['last_vid'] = youtube.get_last_vid(id)
+    playlist['latest_id'] = new_latest_id
 
 
 def schedule_thread():
     while True:
         schedule.run_pending()
         time.sleep(1)
-
-
-def init(update_rate):
-    global playlists_to_update
-    try:
-        with open('update_list.dat', 'r+b') as update_list_dat:
-            playlists_to_update = pickle.load(update_list_dat)
-    except IOError:
-        open('update_list.dat', 'w').close()
-
-    schedule.every(update_rate).seconds.do(job)
-    new_thread(schedule_thread)
 
 
 def new_thread(target):
@@ -111,17 +106,19 @@ parser = argparse.ArgumentParser(
     description="Automated youtube playlist downloader")
 group = parser.add_mutually_exclusive_group()
 group.add_argument('-lk', '--liked', action='store_true', help='Add your liked videos')
-group.add_argument('-p', '--my-playlists', action='store_true', help='List your playlists')
-group.add_argument('-l', '--link', help='Add playlist by link')
-group.add_argument('-c', '--channel', help='Add channel uploads')
+group.add_argument('-mp', '--my-playlists', action='store_true', help='Choose from your playlists')
+group.add_argument('-id', '--id', help='Add playlist by id')
+group.add_argument('-ch', '--channel', help='Add channel uploads, by channel id')
 parser.add_argument('-d', '--download', action='store_true', help='Add and download current playlist retroactively')
 parser.add_argument('-o', '--options', dest='ydl_opts', action=StoreDictKeyPair, metavar='OPT1=VAL1,OPT2=OPT2...',
                     help='youtube-dl options')
+parser.add_argument('-ls', '--list', action='store_true', help='List saved playlists')
 
 args = parser.parse_args()
 
-if __name__ == '__main__':
 
+
+def main():
     if len(sys.argv) > 1:
         youtube.init()
         init(update_rate)
@@ -131,22 +128,31 @@ if __name__ == '__main__':
             playlists = youtube.get_my_playlists()
             stop_anim()
 
-            for (i, playlist) in enumerate(playlists['items']):
-                print(i, ') ', playlist['snippet']['title'], sep='')
+            for (i, playlist) in enumerate(playlists):
+                print(i, ') ', playlist['title'], sep='')
 
             integer = input("\nEnter playlist number: ")
-            item = playlists['items'][integer]
+            item = playlists[integer]
             add_to_update_queue(item)
 
             if args.download:
-                download_playlist(item)
-        elif args.link:
+                download(item, item['title'])
+        elif args.id:
             stop_anim()
-            print(args.custom_link)
+            playlist = youtube.get_playlist(args.id)
+            add_to_update_queue(playlist)
         elif args.channel:
-            print()
+            stop_anim()
+            playlist = youtube.get_uploads_playlist(args.channel)
+            add_to_update_queue(playlist)
+        elif args.list:
+            stop_anim()
+            print([playlist['title'].encode('utf-8') for playlist in playlists_to_update])
 
         with open('update_list.dat', 'wb') as update_list_dat:
             pickle.dump(playlists_to_update, update_list_dat)
     else:
         parser.print_help()
+
+
+
