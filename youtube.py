@@ -2,6 +2,7 @@ from __future__ import print_function
 import os
 import pickle
 
+from dateutil.parser import *
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -89,7 +90,8 @@ def get_playlist_items(id, all=False, maxResults=50):
     def get_items():
         return [{
             'title': item['snippet']['title'],
-            'id': item['snippet']['resourceId']['videoId']
+            'id': item['snippet']['resourceId']['videoId'],
+            'date': parse(item['snippet']['publishedAt'])
         } for item in response['items']]
 
     response = _playlistitems_list(id, maxResults=maxResults)
@@ -99,10 +101,12 @@ def get_playlist_items(id, all=False, maxResults=50):
         response = _playlistitems_list(id, token, maxResults)
         token = response.get('nextPageToken')
         videos.extend(get_items())
+    videos.sort(key=lambda dict: dict['date'], reverse=True)
     return videos
 
 
 def get_liked_playlist():
+    # unused
     liked_id = _channel_related_playlists(mine=True)['likes']
     return get_playlist_items(liked_id, True)
 
@@ -110,10 +114,6 @@ def get_liked_playlist():
 def get_uploads_playlist(id):
     upload_id = _channel_related_playlists(id)['uploads']
     return get_playlist(upload_id)
-
-
-def get_latest_id(id):
-    return get_playlist_items(id, maxResults=1)[0]['id']
 
 
 def get_playlist(id):

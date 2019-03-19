@@ -34,10 +34,10 @@ class StoreDictKeyPair(argparse.Action):
 def init(update_rate):
     global playlists_to_update
     try:
-        with open('update_list.dat', 'r+b') as update_list_dat:
-            playlists_to_update = pickle.load(update_list_dat)
+        with open('playlists.dat', 'r+b') as playlists:
+            playlists_to_update = pickle.load(playlists)
     except IOError:
-        open('update_list.dat', 'w').close()
+        open('playlists.dat', 'w').close()
 
     schedule.every(update_rate).seconds.do(job)
     new_thread(schedule_thread)
@@ -65,28 +65,24 @@ def add_to_update_queue(item):
 
 
 def download(item, title):
-    print('Downloading ', title)
     ydl_opts['outtmpl'] = '{}\%(title)s.%(ext)s'.format(title)
     youtube_dl.YoutubeDL(ydl_opts).download([item['id']])
 
 
 def job():
-    print("I'm working...")
     map(update, playlists_to_update)
 
 
 def update(playlist):
-    latest_id = playlist.get('latest_id')
-    old_id = playlist['id']
-    new_latest_id = youtube.get_latest_id(old_id)
-    if latest_id:
-        if latest_id != new_latest_id:
-            new_vids = youtube.get_playlist_items(old_id)
-            old_vid_pos = next((index for (index, id) in enumerate(new_vids) if id['id'] == latest_id), None)
-            map(download, new_vids[:old_vid_pos], [playlist['title']])
-        else:
-            print('no update')
-    playlist['latest_id'] = new_latest_id
+    new_playlist = youtube.get_playlist_items(playlist['id'])
+    new_vid = new_playlist[0]
+    old_vid = playlist.get('latest')
+
+    if old_vid and old_vid['id'] != new_vid['id']:
+        old_vid_pos = next((index for (index, item) in enumerate(new_playlist) if item['id'] == old_vid['id']), None)
+        map(download, new_playlist[:old_vid_pos], [playlist['title']])
+
+    playlist['latest'] = new_vid
 
 
 def schedule_thread():
@@ -112,7 +108,6 @@ parser.add_argument('-o', '--options', dest='ydl_opts', action=StoreDictKeyPair,
 parser.add_argument('-ls', '--list', action='store_true', help='List saved playlists')
 
 args = parser.parse_args()
-
 
 
 def main():
@@ -151,7 +146,6 @@ def main():
     else:
         parser.print_help()
 
+
 if __name__ == '__main__':
     main()
-
-
