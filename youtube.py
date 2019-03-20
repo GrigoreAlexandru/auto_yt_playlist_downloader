@@ -45,10 +45,6 @@ def init():
                    credentials=credentials)
 
 
-# =====================================
-#     Custom Youtube api requests
-# =====================================
-
 def _playlistitems_list(id, token=None, maxResults=50):
     """
 

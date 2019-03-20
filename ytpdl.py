@@ -16,7 +16,7 @@ import youtube
 import youtube_dl
 
 parser = argparse.ArgumentParser(
-        description="Automated youtube playlist downloader")
+    description="Automated youtube playlist downloader")
 saved_playlists = []
 
 poll_rate = 0.2 * 60  # In seconds
@@ -31,6 +31,7 @@ class StoreDictKeyPair(argparse.Action):
     """
     Custom argparse action to store arguments as key-value pair dict.
     """
+
     def __call__(self, parser, namespace, values, option_string=None):
         my_dict = {}
         for kv in values.split(","):
@@ -128,6 +129,7 @@ def new_thread(target):
     Creates a new thread.
     """
     threading.Thread(target=target).start()
+
 
 def get_args():
     """
