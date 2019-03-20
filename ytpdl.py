@@ -1,3 +1,7 @@
+"""
+Entry module containing the logic and CLI.
+The program currently works by polling the Youtube API at the set rate in a separate thread.
+"""
 from __future__ import print_function, unicode_literals
 
 import itertools
@@ -11,10 +15,11 @@ import argparse
 import youtube
 import youtube_dl
 
-# Lists of Youtube playlist resource
-playlists_to_update = []
+parser = argparse.ArgumentParser(
+        description="Automated youtube playlist downloader")
+saved_playlists = []
 
-update_rate = 0.2 * 60
+poll_rate = 0.2 * 60  # In seconds
 done = False
 ydl_opts = {
     'ignore-errors': True
@@ -23,6 +28,9 @@ ydl_opts = {
 
 
 class StoreDictKeyPair(argparse.Action):
+    """
+    Custom argparse action to store arguments as key-value pair dict.
+    """
     def __call__(self, parser, namespace, values, option_string=None):
         my_dict = {}
         for kv in values.split(","):
@@ -31,19 +39,25 @@ class StoreDictKeyPair(argparse.Action):
         setattr(namespace, self.dest, my_dict)
 
 
-def init(update_rate):
-    global playlists_to_update
+def init(poll_rate):
+    """
+    Reads or creates the file that contains the saved playlists and scheldules the Youtube API poll.
+    """
+    global saved_playlists
     try:
         with open('playlists.dat', 'r+b') as playlists:
-            playlists_to_update = pickle.load(playlists)
+            saved_playlists = pickle.load(playlists)
     except IOError:
         open('playlists.dat', 'w').close()
 
-    schedule.every(update_rate).seconds.do(job)
+    schedule.every(poll_rate).seconds.do(job)
     new_thread(schedule_thread)
 
 
 def animate():
+    """
+    Loading animation.
+    """
     for c in itertools.cycle(['|', '/', '-', '\\']):
         if done:
             break
@@ -54,26 +68,41 @@ def animate():
 
 
 def stop_anim():
+    """
+    Loading animation.
+    """
     global done
     done = True
     time.sleep(0.3)
 
 
-def add_to_update_queue(item):
-    playlists_to_update.append(item)
+def save_playlist(item):
+    """
+    Saves playlist.
+    """
+    saved_playlists.append(item)
     print(item['title'], "added to update queue")
 
 
 def download(item, title):
+    """
+    Downloads playlist and sets youtubedls download location to 'playlist_title/video_title' .
+    """
     ydl_opts['outtmpl'] = '{}\%(title)s.%(ext)s'.format(title)
     youtube_dl.YoutubeDL(ydl_opts).download([item['id']])
 
 
 def job():
-    map(update, playlists_to_update)
+    """
+    Job to be executed.
+    """
+    map(update, saved_playlists)
 
 
 def update(playlist):
+    """
+    Update logic. Checks for new items and downloads from the last known item.
+    """
     new_playlist = youtube.get_playlist_items(playlist['id'])
     new_vid = new_playlist[0]
     old_vid = playlist.get('latest')
@@ -86,34 +115,45 @@ def update(playlist):
 
 
 def schedule_thread():
+    """
+    Schedules the update thead.
+    """
     while True:
         schedule.run_pending()
         time.sleep(1)
 
 
 def new_thread(target):
+    """
+    Creates a new thread.
+    """
     threading.Thread(target=target).start()
 
+def get_args():
+    """
+    Sets up argparse.
+    :return: parsed arguments
+    """
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('-lk', '--liked', action='store_true', help='Add your liked videos')
+    group.add_argument('-mp', '--my-playlists', action='store_true', help='Choose from your playlists')
+    group.add_argument('-id', '--id', help='Add playlist by id')
+    group.add_argument('-ch', '--channel', help='Add channel uploads, by channel id')
+    parser.add_argument('-d', '--download', action='store_true', help='Add and download current playlist retroactively')
+    parser.add_argument('-o', '--options', dest='ydl_opts', action=StoreDictKeyPair, metavar='OPT1=VAL1,OPT2=OPT2...',
+                        help='youtube-dl options')
+    parser.add_argument('-ls', '--list', action='store_true', help='List saved playlists')
 
-parser = argparse.ArgumentParser(
-    description="Automated youtube playlist downloader")
-group = parser.add_mutually_exclusive_group()
-group.add_argument('-lk', '--liked', action='store_true', help='Add your liked videos')
-group.add_argument('-mp', '--my-playlists', action='store_true', help='Choose from your playlists')
-group.add_argument('-id', '--id', help='Add playlist by id')
-group.add_argument('-ch', '--channel', help='Add channel uploads, by channel id')
-parser.add_argument('-d', '--download', action='store_true', help='Add and download current playlist retroactively')
-parser.add_argument('-o', '--options', dest='ydl_opts', action=StoreDictKeyPair, metavar='OPT1=VAL1,OPT2=OPT2...',
-                    help='youtube-dl options')
-parser.add_argument('-ls', '--list', action='store_true', help='List saved playlists')
-
-args = parser.parse_args()
+    return parser.parse_args()
 
 
-def main():
+def main(args):
+    """
+    Main logic and CLI handler.
+    """
     if len(sys.argv) > 1:
         youtube.init()
-        init(update_rate)
+        init(poll_rate)
         new_thread(animate)
 
         if args.my_playlists:
@@ -124,28 +164,28 @@ def main():
                 print(i, ') ', playlist['title'], sep='')
 
             integer = input("\nEnter playlist number: ")
-            item = playlists[integer]
-            add_to_update_queue(item)
+            playlist = playlists[integer]
+            save_playlist(playlist)
 
             if args.download:
-                download(item, item['title'])
+                download(playlist, playlist['title'])
         elif args.id:
             stop_anim()
             playlist = youtube.get_playlist(args.id)
-            add_to_update_queue(playlist)
+            save_playlist(playlist)
         elif args.channel:
             stop_anim()
             playlist = youtube.get_uploads_playlist(args.channel)
-            add_to_update_queue(playlist)
+            save_playlist(playlist)
         elif args.list:
             stop_anim()
-            print([playlist['title'].encode('utf-8') for playlist in playlists_to_update])
+            print([playlist['title'].encode('utf-8') for playlist in saved_playlists])
 
         with open('update_list.dat', 'wb') as update_list_dat:
-            pickle.dump(playlists_to_update, update_list_dat)
+            pickle.dump(saved_playlists, update_list_dat)
     else:
         parser.print_help()
 
 
 if __name__ == '__main__':
-    main()
+    main(get_args())
