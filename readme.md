@@ -6,6 +6,9 @@ Uses [youtube-dl](https://github.com/ytdl-org/youtube-dl) to download videos. Al
 
 ``` 
 git clone https://github.com/GrigoreAlexandru/auto_yt_playlist_downloader.git
+```
+
+```
 pip install -r auto_yt_playlist_downloader/requirements.txt
 ```
 
